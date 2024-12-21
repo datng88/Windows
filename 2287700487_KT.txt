@@ -1,0 +1,375 @@
+using System;
+using System.Collections.Generic;
+using System.Data.Entity;
+using System.Linq;
+using System.Windows.Forms;
+using De02.Module;
+
+namespace De02
+{
+    public partial class frmSanpham : Form
+    {
+        public frmSanpham()
+        {
+            InitializeComponent();
+        }
+
+        private void frmSanpham_Load(object sender, EventArgs e)
+        {
+            LoadSanPham();
+            LoadLoaiSP();
+
+            // Vô hiệu hóa các nút sửa/lưu ban đầu
+            btnLuu.Enabled = false;
+            btnKLuu.Enabled = false;
+        }
+
+        private void ResetForm()
+        {
+            txtMaSP.Clear();
+            txtTenSP.Clear();
+            dateTimePicker1.Value = DateTime.Now;
+            cmbLoaiSP.SelectedIndex = -1;
+            btnLuu.Enabled = false;
+            btnKLuu.Enabled = false;
+        }
+
+        private void LoadSanPham()
+        {
+            using (var context = new SanPhamDB())
+            {
+                var products = context.Sanphams.Include(sp => sp.LoaiSP).ToList();
+                Grid(products);
+            }
+        }
+
+        private void LoadLoaiSP()
+        {
+            using (var context = new SanPhamDB())
+            {
+                var loaiSPs = context.LoaiSPs.ToList();
+                cmbLoaiSP.DataSource = loaiSPs;
+                cmbLoaiSP.DisplayMember = "TenLoai";
+                cmbLoaiSP.ValueMember = "MaLoai";
+            }
+        }
+
+        private void Grid(List<Sanpham> ListSanPham)
+        {
+            dataGridViewSP.Rows.Clear();
+            foreach (var item in ListSanPham)
+            {
+                int index = dataGridViewSP.Rows.Add();
+                dataGridViewSP.Rows[index].Cells[0].Value = item.MaSP;
+                dataGridViewSP.Rows[index].Cells[1].Value = item.TenSP;
+                dataGridViewSP.Rows[index].Cells[2].Value = item.Ngaynhap;
+                dataGridViewSP.Rows[index].Cells[3].Value = item.LoaiSP?.TenLoai;
+            }
+        }
+
+        private void btThem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using (var context = new SanPhamDB())
+                {
+                    if (string.IsNullOrWhiteSpace(txtMaSP.Text) || string.IsNullOrWhiteSpace(txtTenSP.Text))
+                    {
+                        MessageBox.Show("Vui lòng nhập đầy đủ thông tin sản phẩm!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    // Kiểm tra sản phẩm đã tồn tại chưa
+                    var existingProduct = context.Sanphams.FirstOrDefault(sp => sp.MaSP == txtMaSP.Text.Trim());
+                    if (existingProduct != null)
+                    {
+                        MessageBox.Show("Mã sản phẩm đã tồn tại!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    Sanpham newProduct = new Sanpham
+                    {
+                        MaSP = txtMaSP.Text.Trim(),
+                        TenSP = txtTenSP.Text.Trim(),
+                        Ngaynhap = dateTimePicker1.Value,
+                        MaLoai = cmbLoaiSP.SelectedValue.ToString()
+                    };
+
+                    context.Sanphams.Add(newProduct);
+                    context.SaveChanges();
+
+                    LoadSanPham();
+                    MessageBox.Show("Thêm sản phẩm thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    // Reset form sau khi thêm mới
+                    ResetForm();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi thêm sản phẩm: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+
+        private void btSua_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using (var context = new SanPhamDB())
+                {
+                    string selectedMaSP = txtMaSP.Text.Trim();
+
+                    var existingProduct = context.Sanphams.FirstOrDefault(sp => sp.MaSP == selectedMaSP);
+                    if (existingProduct != null)
+                    {
+                        existingProduct.TenSP = txtTenSP.Text.Trim();
+                        existingProduct.Ngaynhap = dateTimePicker1.Value;
+                        existingProduct.MaLoai = cmbLoaiSP.SelectedValue.ToString();
+
+                        context.SaveChanges();
+                        LoadSanPham();
+
+                        MessageBox.Show("Sửa thông tin sản phẩm thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        ResetForm();
+                    }
+                    else
+                    {
+                        MessageBox.Show("Không tìm thấy sản phẩm để sửa!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi sửa sản phẩm: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+
+        private void btXoa_Click(object sender, EventArgs e)
+        {
+            if (dataGridViewSP.SelectedRows.Count > 0)
+            {
+                var result = MessageBox.Show("Bạn có chắc muốn xóa sản phẩm này?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result == DialogResult.Yes)
+                {
+                    try
+                    {
+                        using (var context = new SanPhamDB())
+                        {
+                            string maSP = dataGridViewSP.SelectedRows[0].Cells[0].Value.ToString();
+                            var product = context.Sanphams.FirstOrDefault(p => p.MaSP == maSP);
+
+                            if (product != null)
+                            {
+                                context.Sanphams.Remove(product);
+                                context.SaveChanges();
+                                LoadSanPham();
+
+                                MessageBox.Show("Xóa sản phẩm thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                ResetForm();
+                            }
+                            else
+                            {
+                                MessageBox.Show("Không tìm thấy sản phẩm để xóa!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Lỗi khi xóa sản phẩm: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+            else
+            {
+                MessageBox.Show("Vui lòng chọn một sản phẩm để xóa!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+
+        private void btnTim_Click(object sender, EventArgs e)
+        {
+            var searchQuery = txtTim.Text.Trim();
+            using (var context = new SanPhamDB())
+            {
+                var products = context.Sanphams
+                    .Where(sp => sp.TenSP.Contains(searchQuery))
+                    .Include(sp => sp.LoaiSP)
+                    .ToList();
+
+                if (products.Count > 0)
+                {
+                    Grid(products);
+                }
+                else
+                {
+                    MessageBox.Show("Không tìm thấy sản phẩm nào!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    LoadSanPham();
+                }
+            }
+        }
+
+
+
+        private void dataGridViewSP_SelectionChanged(object sender, EventArgs e)
+        {
+            if (dataGridViewSP.SelectedRows.Count > 0)
+            {
+                var row = dataGridViewSP.SelectedRows[0];
+                txtMaSP.Text = row.Cells[0].Value.ToString();
+                txtTenSP.Text = row.Cells[1].Value.ToString();
+                dateTimePicker1.Value = Convert.ToDateTime(row.Cells[2].Value);
+                cmbLoaiSP.SelectedValue = row.Cells[3].Value;
+
+                btnLuu.Enabled = true;
+                btnKLuu.Enabled = true;
+            }
+        }
+
+        private void btnSua_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using (var context = new SanPhamDB())
+                {
+                    string selectedMaSP = txtMaSP.Text.Trim();
+
+                    var existingProduct = context.Sanphams.FirstOrDefault(sp => sp.MaSP == selectedMaSP);
+                    if (existingProduct != null)
+                    {
+                        existingProduct.TenSP = txtTenSP.Text.Trim();
+                        existingProduct.Ngaynhap = dateTimePicker1.Value;
+                        existingProduct.MaLoai = cmbLoaiSP.SelectedValue.ToString();
+
+                        context.SaveChanges();
+                        LoadSanPham();
+
+                        MessageBox.Show("Sửa thông tin sản phẩm thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        ResetForm();
+                    }
+                    else
+                    {
+                        MessageBox.Show("Không tìm thấy sản phẩm để sửa!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi sửa sản phẩm: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnThem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using (var context = new SanPhamDB())
+                {
+                    if (string.IsNullOrWhiteSpace(txtMaSP.Text) || string.IsNullOrWhiteSpace(txtTenSP.Text))
+                    {
+                        MessageBox.Show("Vui lòng nhập đầy đủ thông tin sản phẩm!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                
+                    var existingProduct = context.Sanphams.FirstOrDefault(sp => sp.MaSP == txtMaSP.Text.Trim());
+                    if (existingProduct != null)
+                    {
+                        MessageBox.Show("Mã sản phẩm đã tồn tại!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    Sanpham newProduct = new Sanpham
+                    {
+                        MaSP = txtMaSP.Text.Trim(),
+                        TenSP = txtTenSP.Text.Trim(),
+                        Ngaynhap = dateTimePicker1.Value,
+                        MaLoai = cmbLoaiSP.SelectedValue.ToString()
+                    };
+
+                    context.Sanphams.Add(newProduct);
+                    context.SaveChanges();
+
+                    LoadSanPham();
+                    MessageBox.Show("Thêm sản phẩm thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    // Reset form sau khi thêm mới
+                    ResetForm();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi thêm sản phẩm: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        
+
+        private void btnKLuu_Click(object sender, EventArgs e)
+{
+    ResetForm();
+    MessageBox.Show("Hủy bỏ thao tác chỉnh sửa!", "Thông báo");
+}
+
+        private void btnLuu_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btnXoa_Click_1(object sender, EventArgs e)
+        {
+
+            if (dataGridViewSP.SelectedRows.Count > 0)
+            {
+                var result = MessageBox.Show("Bạn có chắc muốn xóa sản phẩm này?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result == DialogResult.Yes)
+                {
+                    try
+                    {
+                        using (var context = new SanPhamDB())
+                        {
+                            string maSP = dataGridViewSP.SelectedRows[0].Cells[0].Value.ToString();
+                            var product = context.Sanphams.FirstOrDefault(p => p.MaSP == maSP);
+
+                            if (product != null)
+                            {
+                                context.Sanphams.Remove(product);
+                                context.SaveChanges();
+                                LoadSanPham();
+
+                                MessageBox.Show("Xóa sản phẩm thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                ResetForm();
+                            }
+                            else
+                            {
+                                MessageBox.Show("Không tìm thấy sản phẩm để xóa!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Lỗi khi xóa sản phẩm: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+            else
+            {
+                MessageBox.Show("Vui lòng chọn một sản phẩm để xóa!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        
+
+    }
+
+        private void btnThoat_Click(object sender, EventArgs e)
+        {
+            var result = MessageBox.Show("Bạn có chắc chắn muốn thoát ứng dụng?", "Xác nhận thoát", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                Application.Exit();
+            }
+        }
+
+    }
+}
